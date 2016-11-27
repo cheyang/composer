@@ -1,8 +1,9 @@
 package main
 
 import (
-	"context"
 	"os"
+
+	"golang.org/x/net/context"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/libcompose/docker"
