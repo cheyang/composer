@@ -3,7 +3,6 @@ package graphdriver
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,13 +35,6 @@ var (
 	ErrIncompatibleFS = fmt.Errorf("backing file system is unsupported for this graph driver")
 )
 
-//CreateOpts contains optional arguments for Create() and CreateReadWrite()
-// methods.
-type CreateOpts struct {
-	MountLabel string
-	StorageOpt map[string]string
-}
-
 // InitFunc initializes the storage driver.
 type InitFunc func(root string, options []string, uidMaps, gidMaps []idtools.IDMap) (Driver, error)
 
@@ -56,13 +48,11 @@ type ProtoDriver interface {
 	// String returns a string representation of this driver.
 	String() string
 	// CreateReadWrite creates a new, empty filesystem layer that is ready
-	// to be used as the storage for a container. Additional options can
-	// be passed in opts. parent may be "" and opts may be nil.
-	CreateReadWrite(id, parent string, opts *CreateOpts) error
+	// to be used as the storage for a container.
+	CreateReadWrite(id, parent, mountLabel string, storageOpt map[string]string) error
 	// Create creates a new, empty, filesystem layer with the
-	// specified id and parent and options passed in opts. Parent
-	// may be "" and opts may be nil.
-	Create(id, parent string, opts *CreateOpts) error
+	// specified id and parent and mountLabel. Parent and mountLabel may be "".
+	Create(id, parent, mountLabel string, storageOpt map[string]string) error
 	// Remove attempts to remove the filesystem layer with this id.
 	Remove(id string) error
 	// Get returns the mountpoint for the layered filesystem referred
@@ -87,11 +77,12 @@ type ProtoDriver interface {
 	Cleanup() error
 }
 
-// DiffDriver is the interface to use to implement graph diffs
-type DiffDriver interface {
+// Driver is the interface for layered/snapshot file system drivers.
+type Driver interface {
+	ProtoDriver
 	// Diff produces an archive of the changes between the specified
 	// layer and its parent layer which may be "".
-	Diff(id, parent string) (io.ReadCloser, error)
+	Diff(id, parent string) (archive.Archive, error)
 	// Changes produces a list of changes between the specified layer
 	// and its parent layer. If parent is "", then all changes will be ADD changes.
 	Changes(id, parent string) ([]archive.Change, error)
@@ -99,17 +90,11 @@ type DiffDriver interface {
 	// layer with the specified id and parent, returning the size of the
 	// new layer in bytes.
 	// The archive.Reader must be an uncompressed stream.
-	ApplyDiff(id, parent string, diff io.Reader) (size int64, err error)
+	ApplyDiff(id, parent string, diff archive.Reader) (size int64, err error)
 	// DiffSize calculates the changes between the specified id
 	// and its parent and returns the size in bytes of the changes
 	// relative to its base filesystem directory.
 	DiffSize(id, parent string) (size int64, err error)
-}
-
-// Driver is the interface for layered/snapshot file system drivers.
-type Driver interface {
-	ProtoDriver
-	DiffDriver
 }
 
 // DiffGetterDriver is the interface for layered file system drivers that
@@ -171,7 +156,7 @@ func getBuiltinDriver(name, home string, options []string, uidMaps, gidMaps []id
 }
 
 // New creates the driver and initializes it at the specified root.
-func New(root, name string, options []string, uidMaps, gidMaps []idtools.IDMap, pg plugingetter.PluginGetter) (Driver, error) {
+func New(root string, name string, options []string, uidMaps, gidMaps []idtools.IDMap, pg plugingetter.PluginGetter) (Driver, error) {
 	if name != "" {
 		logrus.Debugf("[graphdriver] trying provided driver: %s", name) // so the logs show specified driver
 		return GetDriver(name, root, options, uidMaps, gidMaps, pg)

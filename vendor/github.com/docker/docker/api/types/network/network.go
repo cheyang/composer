@@ -28,12 +28,6 @@ type EndpointIPAMConfig struct {
 	LinkLocalIPs []string `json:",omitempty"`
 }
 
-// PeerInfo represents one peer of a overlay network
-type PeerInfo struct {
-	Name string
-	IP   string
-}
-
 // EndpointSettings stores the network endpoint details
 type EndpointSettings struct {
 	// Configurations

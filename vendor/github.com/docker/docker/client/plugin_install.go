@@ -1,3 +1,5 @@
+// +build experimental
+
 package client
 
 import (
@@ -10,7 +12,7 @@ import (
 )
 
 // PluginInstall installs a plugin
-func (cli *Client) PluginInstall(ctx context.Context, name string, options types.PluginInstallOptions) (err error) {
+func (cli *Client) PluginInstall(ctx context.Context, name string, options types.PluginInstallOptions) error {
 	// FIXME(vdemeester) name is a ref, we might want to parse/validate it here.
 	query := url.Values{}
 	query.Set("name", name)
@@ -27,14 +29,6 @@ func (cli *Client) PluginInstall(ctx context.Context, name string, options types
 		ensureReaderClosed(resp)
 		return err
 	}
-
-	defer func() {
-		if err != nil {
-			delResp, _ := cli.delete(ctx, "/plugins/"+name, nil, nil)
-			ensureReaderClosed(delResp)
-		}
-	}()
-
 	var privileges types.PluginPrivileges
 	if err := json.NewDecoder(resp.body).Decode(&privileges); err != nil {
 		ensureReaderClosed(resp)
@@ -48,21 +42,15 @@ func (cli *Client) PluginInstall(ctx context.Context, name string, options types
 			return err
 		}
 		if !accept {
+			resp, _ := cli.delete(ctx, "/plugins/"+name, nil, nil)
+			ensureReaderClosed(resp)
 			return pluginPermissionDenied{name}
 		}
 	}
-
-	if len(options.Args) > 0 {
-		if err := cli.PluginSet(ctx, name, options.Args); err != nil {
-			return err
-		}
-	}
-
 	if options.Disabled {
 		return nil
 	}
-
-	return cli.PluginEnable(ctx, name, types.PluginEnableOptions{Timeout: 0})
+	return cli.PluginEnable(ctx, name)
 }
 
 func (cli *Client) tryPluginPull(ctx context.Context, query url.Values, registryAuth string) (serverResponse, error) {
